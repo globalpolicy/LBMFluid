@@ -1,0 +1,37 @@
+<html>
+<meta charset="UTF-8">
+
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.js"></script>
+    <script>
+        var _ = window._;
+    </script>
+
+</head>
+<div id="container">
+
+</div>
+<script src="code.js"></script>
+
+<div id="sliders" style="display: none;">
+    Speed of sound: <input id="slider_c" type="range" min="0" max="1" step="0.05" value="1"
+        oninput="c=Number(this.value);document.getElementById('text_c').innerText=this.value;"><span
+        id="text_c">1</span><br />
+</div>
+
+Inflow speed: <input id="slider_v" type="range" min="0" max="1" step="0.01" value="0.3"
+    oninput="changeInflowVel(Number(this.value));document.getElementById('text_v').innerText=this.value;"><span
+    id="text_v">0.3</span><br />
+Viscosity: <input id="slider_viscosity" type="range" min="0" max="2" step="0.01" value="1"
+    oninput="viscosity=Number(this.value);document.getElementById('text_viscosity').innerText=this.value;"><span
+    id="text_viscosity">1</span><br />
+<input type="button" value="Start" onclick="start()">
+<input type="button" value="Stop" onclick="stop()">
+<input type="button" value="Resume" onclick="resume()">
+<input type="button" value="Clear" onclick="clearSolids()">
+<div id="cellInfo">
+
+</div>
+
+</html>
