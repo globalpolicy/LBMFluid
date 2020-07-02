@@ -3,11 +3,12 @@ var animate = false;
 
 const canvasWidth = 800, canvasHeight = 400;
 const dx = 20, dy = 20;
-var inflowVel = [0.3, 0];
+var inflowVel = [0.24, 0];
 const startWithZeroVel = false; //initial velocity of the control domain
-var viscosity = 1;
+var viscosity = 1.46;
 var c = 1;
 var debugCell;
+var prevGridSolidsInfo; //for keeping track of solids between start and stop of simulations
 
 var grid = []; //matrix of the entire grid
 
@@ -45,8 +46,12 @@ class Cell {
 
     calculateMacros() {
         //computes the macroscopic properties : the density and fluid velocity in this cell
+        if (this.isSolid)
+            return;
         this.rho = 0;
-        this.distribution.forEach(f => this.rho += f);
+        this.distribution.forEach(f => {
+            this.rho += f;
+        });
 
         this.velocity = [0, 0];
         this.distribution.forEach((f, index) => {
@@ -107,6 +112,7 @@ function clearSolids() {
             cell.isSolid = false;
         }
     }
+    prevGridSolidsInfo = []; //clear solids info
 }
 
 function setup() {
@@ -119,21 +125,25 @@ function setup() {
     document.getElementById("container").addEventListener("contextmenu", (mouseevent) => {
         mouseevent.preventDefault();
     });
+    frameRate(60);
 }
 
 function draw() {
     if (animate) {
-        step();
-        paintInfo();
+        cycle();
     }
 
 }
 
 function keyPressed() {
     if (keyCode == 32) { //space pressed
-        step();
-        paintInfo();
+        cycle();
     }
+}
+
+function cycle() {
+    step();
+    paintInfo();
 }
 
 function mouseReleasedFn(event) {
@@ -152,6 +162,7 @@ function mouseDraggedFn() {
     if (mouseIsPressed) {
         let clickedCell = getCellFromPos(mouseX, mouseY);
         clickedCell.isSolid = true;
+        prevGridSolidsInfo = _.cloneDeep(grid); //update the solids info
     }
 }
 
@@ -172,6 +183,8 @@ function getCellFromPos(posx, posy) {
     }
     return clickedCell;
 }
+
+
 
 function paintInfo() {
     // //find max and min speed in the (interior) grid
@@ -257,6 +270,7 @@ function initGrid() {
         let row = [];
         for (let i = 1; i < nx - 1; i++) { //iterate through columns
             let x = i * dx, y = j * dy;
+            let isSolid = false;
             if (i == 1 || i == nx - 2 || j == 1 || j == ny - 2) { //boundaries
                 fill('green'); //fill boundary cells as green
                 vel = defaultVel;
@@ -269,7 +283,14 @@ function initGrid() {
                 fill('red'); //fill as red. will have inflow velocity
                 vel = inflowVel;
             }
-            let cell = new Cell(false, x, y, vel, 1);
+            if (prevGridSolidsInfo != null && prevGridSolidsInfo.length > 0) {
+                let oldCell = prevGridSolidsInfo[j - 1][i - 1];
+                if (oldCell != null) {
+                    isSolid = oldCell.isSolid;
+                }
+            }
+
+            let cell = new Cell(isSolid, x, y, vel, 1);
             row.push(cell);
 
             rect(x, y, dx, dy);
@@ -280,10 +301,10 @@ function initGrid() {
     noFill();
 
     // //debug code
-    // for (let i = 7; i <= 10; i++) {
-    //     grid[i][7].isSolid = true;
-    // }
-    // //
+    for (let i = 6; i <= 11; i++) {
+        grid[i][7].isSolid = true;
+    }
+    //
 
 
 }
@@ -295,6 +316,7 @@ function step() {
     for (let i = 1; i < grid.length - 1; i++) { //loop through rows of interior cells
         for (let j = 1; j < grid[0].length - 1; j++) { //loop through columns of interior cells
             let cell = grid[i][j];
+
             cell.relax();
         }
     }
@@ -310,119 +332,8 @@ function step() {
             cell.calculateMacros();
         }
     }
+
 }
-
-// function propagate(originalGrid, newGrid) {
-//     //loop through all interior(non-boundary) cells. the first and the last rows and columns are boundaries
-//     for (let i = 1; i < originalGrid.length - 1; i++) {
-//         for (let j = 1; j < originalGrid[0].length - 1; j++) {
-
-//             let oldGridCell = originalGrid[i][j];
-//             let newGridCell = newGrid[i][j];
-
-//             if (oldGridCell.isSolid) //if current cell is immersed solid
-//                 continue;
-
-//             let leftColumn = j - 1;
-//             let rightColumn = j + 1;
-//             let topRow = i - 1;
-//             let bottomRow = i + 1;
-
-//             if (j == 1) {
-//                 leftColumn = originalGrid[0].length - 1 - 1; //careful here. length-1 is the max possible accessible cell(boundary). another -1 gives the non boundary cell
-//             } else if (j == originalGrid[0].length - 1 - 1) { //and here
-//                 rightColumn = 1;
-//             }
-//             if (i == 1) {
-//                 topRow = originalGrid.length - 1 - 1; //and here
-//             } else if (i == originalGrid.length - 1 - 1) { //and here
-//                 bottomRow = 1;
-//             }
-
-//             let topNeighbor = newGrid[topRow][j];
-//             let bottomNeighbor = newGrid[bottomRow][j];
-//             let rightNeighbor = newGrid[i][rightColumn];
-//             let leftNeighbor = newGrid[i][leftColumn];
-//             let topLeftNeighbor = newGrid[topRow][leftColumn];
-//             let bottomLeftNeighbor = newGrid[bottomRow][leftColumn];
-//             let bottomRightNeighbor = newGrid[bottomRow][rightColumn];
-//             let topRightNeighbor = newGrid[topRow][rightColumn];
-//             let neighbors = [topNeighbor, bottomNeighbor, rightNeighbor, leftNeighbor, topLeftNeighbor, bottomLeftNeighbor, bottomRightNeighbor, topRightNeighbor];
-
-//             neighbors.forEach((neighbor, index) => {
-
-//                 if (neighbor.isSolid) {
-
-//                     //"halfway" bounceback boundary condition for solid boundaries
-//                     switch (index) {
-//                         case 0: //top neighbor is solid boundary
-//                             newGridCell.distribution[4] = oldGridCell.distribution[2]; //replace current cell's southbound distribution with northbound distribution
-//                             break;
-//                         case 1: //bottom neighbor is solid boundary
-//                             newGridCell.distribution[2] = oldGridCell.distribution[4]; //replace current cell's northbound distribution with southbound distribution
-//                             break;
-//                         case 2: //right neighbor is solid boundary
-//                             newGridCell.distribution[3] = oldGridCell.distribution[1]; //replace current cell's westbound distribution with eastbound distribution
-//                             break;
-//                         case 3: //left neighbor is solid boundary
-//                             newGridCell.distribution[1] = oldGridCell.distribution[3]; //replace current cell's eastbound distribution with westbound distribution
-//                             break;
-//                         case 4: //topleft neighbor is solid boundary
-//                             newGridCell.distribution[8] = oldGridCell.distribution[6]; //replace current cell's southeast bound distribution with northwestbound distribution
-//                             break;
-//                         case 5: //bottomleft neighbor is solid boundary
-//                             newGridCell.distribution[5] = oldGridCell.distribution[7]; //replace current cell's northeast bound distribution with southwest bound distribution
-//                             break;
-//                         case 6: //bottomright neighbor is solid boundary
-//                             newGridCell.distribution[6] = oldGridCell.distribution[8]; //replace current cell's northwest bound distribution with southeast bound distribution
-//                             break;
-//                         case 7: //topright neighbor is solid boundary
-//                             newGridCell.distribution[7] = oldGridCell.distribution[5]; //replace current cell's southwest bound distribution with northeast bound distribution
-//                             break;
-//                     }
-
-
-
-
-//                 } else if (!neighbor.isSolid) {
-//                     if (neighbor.colIndex == 2) //if neighbor is the first column of cells(inlet), don't stream to it
-//                         return;
-
-//                     //neighbor is not a solid boundary cell. do simple streaming/propagation here.
-//                     switch (index) {
-//                         case 0: //top neighbor
-//                             neighbor.distribution[2] = oldGridCell.distribution[2]; //replace neighbor cell's northbound distribution with current cell's northbound distribution
-//                             break;
-//                         case 1: //bottom neighbor
-//                             neighbor.distribution[4] = oldGridCell.distribution[4]; //replace neighbor cell's southbound distribution with current cell's southbound distribution
-//                             break;
-//                         case 2: //right neighbor 
-//                             neighbor.distribution[1] = oldGridCell.distribution[1]; //replace neighbor cell's eastbound distribution with current cell's eastbound distribution
-//                             break;
-//                         case 3: //left neighbor
-//                             neighbor.distribution[3] = oldGridCell.distribution[3]; //replace neighbor cell's westbound distribution with current cell's westbound distribution
-//                             break;
-//                         case 4: //topleft neighbor
-//                             neighbor.distribution[6] = oldGridCell.distribution[6]; //replace neighbor cell's northwest distribution with current cell's northwest distribution
-//                             break;
-//                         case 5: //bottomleft neighbor 
-//                             neighbor.distribution[7] = oldGridCell.distribution[7]; //replace neighbor cell's southwest distribution with current cell's southwest distribution
-//                             break;
-//                         case 6: //bottomright neighbor
-//                             neighbor.distribution[8] = oldGridCell.distribution[8]; //replace neighbor cell's southeast distribution with current cell's southeast distribution
-//                             break;
-//                         case 7: //topright neighbor
-//                             neighbor.distribution[5] = oldGridCell.distribution[5]; //replace neighbor cell's northeast distribution with current cell's northeast distribution
-//                             break;
-//                     }
-
-
-//                 }
-//             });
-
-//         }
-//     }
-// }
 
 
 function propagate2(originalGrid, newGrid) {
@@ -451,7 +362,7 @@ function propagate2(originalGrid, newGrid) {
         let finalInteriorCol = originalGrid[0].length - 2;
         newGrid[i][finalInteriorCol].distribution = originalGrid[i][finalInteriorCol - 1].distribution;
     }
-    
+
 }
 
 //distribution array order: rest,E,N,W,S,NE,NW,SW,SE
